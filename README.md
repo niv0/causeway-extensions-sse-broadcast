@@ -55,12 +55,16 @@ Spring `@Configuration` class that enables the broadcast module.
 This project depends on:
 
 - `causeway-extensions-sse-applib` (3.5.0) - For common SSE interfaces (SseChannel, SseSource)
+- `causeway-core-config` (3.5.0) - For CausewayConfiguration (including CORS settings) (provided)
 - Spring Web - For servlet support (provided)
 - Jakarta Servlet API - For servlet functionality (provided)
 - Causeway Core Runtime Services - For InteractionService (provided)
 - Lombok - For logging annotations (provided)
 
-**Note:** The broadcast project reuses common SSE interfaces (SseChannel, SseSource) from applib but provides its own broadcast-specific service interface (SseBroadcastService).
+**Note:** 
+- The broadcast project reuses common SSE interfaces (SseChannel, SseSource) from applib but provides its own broadcast-specific service interface (SseBroadcastService).
+- CORS configuration is read from Causeway core config (`causeway-core-config`), not a separate CORS extension.
+- No dependency on `causeway-extensions-cors` is required.
 
 ## Usage
 
@@ -132,10 +136,18 @@ causeway:
       broadcast:
         bypass-authentication: true  # Development only - allows unauthenticated connections
     cors:
+      # CORS configuration (uses Causeway core config - no CORS extension needed)
       allowed-origins:
         - http://localhost:3000
         - http://localhost:8080
+      allow-credentials: true
 ```
+
+**Notes:**
+- CORS configuration is read from Causeway core configuration (no separate CORS extension dependency required)
+- If `allowed-origins` is not configured, CORS headers are not set (stricter security)
+- Origins must match exactly (including port)
+- Never use `*` wildcard when `allow-credentials: true`
 
 ## Build
 

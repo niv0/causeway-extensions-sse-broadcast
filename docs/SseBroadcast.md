@@ -415,17 +415,58 @@ causeway:
 
 ### CORS Configuration
 
-Currently hardcoded in `BroadcastSseServlet`:
-```java
-response.setHeader("Access-Control-Allow-Origin", "*"); // Development only
+The broadcast servlet reads CORS settings directly from Causeway's core configuration (no CORS extension dependency required).
+
+**Configuration in application.yml:**
+
+```yaml
+causeway:
+  extensions:
+    cors:
+      allowed-origins:
+        - http://localhost:63342  # IntelliJ built-in web server
+        - http://localhost:3000   # React development server
+        - https://your-domain.com
+      allow-credentials: true
 ```
 
-For production, modify to:
-```java
-response.setHeader("Access-Control-Allow-Origin", "https://your-domain.com");
+**How It Works:**
+
+1. The servlet reads `causeway.extensions.cors.allowed-origins` from `CausewayConfiguration`
+2. If configured, CORS headers are set for allowed origins
+3. If not configured, no CORS headers are added (requests from different origins will fail)
+
+**For Production:**
+
+```yaml
+causeway:
+  extensions:
+    cors:
+      allowed-origins:
+        - https://your-production-domain.com
+      allow-credentials: true
 ```
 
-Or make it configurable via application properties (future enhancement).
+**For Development (multiple origins):**
+
+```yaml
+causeway:
+  extensions:
+    cors:
+      allowed-origins:
+        - http://localhost:63342
+        - http://localhost:3000
+        - http://localhost:8080
+        - http://127.0.0.1:8080
+      allow-credentials: true
+```
+
+**Notes:**
+- ✅ Uses Causeway core configuration (no separate CORS extension needed)
+- ✅ Origin must match exactly (including port)
+- ✅ Credentials support enabled for authenticated SSE connections
+- ✅ Falls back to no CORS headers if not configured (stricter security)
+- ⚠️ Never use `*` wildcard when `allow-credentials: true` (browser security restriction)
 
 ---
 

@@ -18,6 +18,23 @@
  */
 package org.apache.causeway.extensions.sse.broadcast.services;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import jakarta.annotation.Priority;
+import jakarta.inject.Named;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.causeway.applib.annotation.PriorityPrecedence;
+import org.apache.causeway.commons.internal.base._Strings;
+import org.apache.causeway.commons.internal.collections._Lists;
+import org.apache.causeway.extensions.sse.applib.annotations.SseSource;
+import org.apache.causeway.extensions.sse.applib.service.SseChannel;
+import org.apache.causeway.extensions.sse.broadcast.CausewayModuleExtSseBroadcast;
+import org.apache.causeway.extensions.sse.broadcast.service.SseBroadcastService;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,27 +46,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import jakarta.annotation.Priority;
-import jakarta.inject.Named;
-
-import org.apache.causeway.extensions.sse.applib.service.SseService;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Service;
-
-import org.apache.causeway.applib.annotation.PriorityPrecedence;
-import org.apache.causeway.commons.internal.base._Strings;
-import org.apache.causeway.commons.internal.collections._Lists;
-import org.apache.causeway.extensions.sse.applib.annotations.SseSource;
-import org.apache.causeway.extensions.sse.applib.service.SseChannel;
-import org.apache.causeway.extensions.sse.broadcast.service.SseBroadcastService;
-import org.apache.causeway.extensions.sse.broadcast.CausewayModuleExtSseBroadcast;
-
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Broadcast-style Server-Sent Events service implementation.
@@ -66,7 +62,6 @@ import lombok.extern.slf4j.Slf4j;
  * </p>
  *
  * @see <a href="https://html.spec.whatwg.org/multipage/server-sent-events.html">Server-Sent Events Spec</a>
- *
  * @since 3.1 {@index}
  */
 @Service
@@ -81,7 +76,7 @@ public class SseBroadcastServiceImpl implements SseBroadcastService {
     // Channel name validation pattern: alphanumeric, dash, underscore, colon, dot (1-100 chars)
     // Must not start with _system (reserved prefix)
     private static final Pattern VALID_CHANNEL_NAME =
-        Pattern.compile("^(?!_system)[a-zA-Z0-9\\-_:.]{1,100}$");
+            Pattern.compile("^(?!_system)[a-zA-Z0-9\\-_:.]{1,100}$");
 
     private static final int MAX_PAYLOAD_SIZE = 64 * 1024; // 64KB
 
@@ -121,7 +116,7 @@ public class SseBroadcastServiceImpl implements SseBroadcastService {
         broadcastChannel.firePayload(payload);
 
         log.debug("Broadcast to channel '{}' completed, {} clients",
-            channelName, broadcastChannel.getListenerCount());
+                channelName, broadcastChannel.getListenerCount());
     }
 
 
@@ -133,8 +128,8 @@ public class SseBroadcastServiceImpl implements SseBroadcastService {
     @Override
     public int getClientCount(final String channelName) {
         return channelPool.getChannel(channelName)
-            .map(channel -> ((BroadcastChannel) channel).getListenerCount())
-            .orElse(0);
+                .map(channel -> ((BroadcastChannel) channel).getListenerCount())
+                .orElse(0);
     }
 
     @Override
@@ -156,15 +151,15 @@ public class SseBroadcastServiceImpl implements SseBroadcastService {
         }
         if (!VALID_CHANNEL_NAME.matcher(channelName).matches()) {
             throw new IllegalArgumentException(
-                "Invalid channel name: '" + channelName + "'. " +
-                "Must be 1-100 characters, alphanumeric with -_:. and not start with _system");
+                    "Invalid channel name: '" + channelName + "'. " +
+                            "Must be 1-100 characters, alphanumeric with -_:. and not start with _system");
         }
     }
 
     private void validatePayload(final String payload) {
         if (payload.length() > MAX_PAYLOAD_SIZE) {
             throw new IllegalArgumentException(
-                "Payload size exceeds maximum: " + payload.length() + " > " + MAX_PAYLOAD_SIZE);
+                    "Payload size exceeds maximum: " + payload.length() + " > " + MAX_PAYLOAD_SIZE);
         }
     }
 
@@ -180,10 +175,10 @@ public class SseBroadcastServiceImpl implements SseBroadcastService {
 
         public synchronized BroadcastChannel getOrCreateChannel(final String channelName) {
             return channelsByName.computeIfAbsent(channelName,
-                name -> {
-                    log.info("Creating new broadcast channel: {}", name);
-                    return new BroadcastChannel(UUID.randomUUID(), name);
-                });
+                    name -> {
+                        log.info("Creating new broadcast channel: {}", name);
+                        return new BroadcastChannel(UUID.randomUUID(), name);
+                    });
         }
 
         public synchronized void removeChannel(final String channelName) {
@@ -221,7 +216,8 @@ public class SseBroadcastServiceImpl implements SseBroadcastService {
         private static final Object $LOCK = new Object[0];
 
         private final UUID uuid;
-        @Getter private final String channelName;
+        @Getter
+        private final String channelName;
         private final CountDownLatch latch;
         private final Queue<Predicate<SseSource>> listeners;
 
@@ -256,7 +252,7 @@ public class SseBroadcastServiceImpl implements SseBroadcastService {
             }
 
             log.debug("Broadcasting to {} listeners on channel {}",
-                defensiveCopyOfListeners.size(), channelName);
+                    defensiveCopyOfListeners.size(), channelName);
 
             final List<Predicate<SseSource>> markedForRemoval = _Lists.newArrayList();
 
@@ -293,7 +289,7 @@ public class SseBroadcastServiceImpl implements SseBroadcastService {
                 if (isActive()) {
                     listeners.add(listener);
                     log.debug("New listener added to channel {}, total: {}",
-                        channelName, listeners.size());
+                            channelName, listeners.size());
                 }
             }
         }
