@@ -24,7 +24,7 @@
 
     <groupId>org.apache.causeway.extensions</groupId>
     <artifactId>causeway-extensions-sse-broadcast</artifactId>
-    <version>3.5.0</version>
+    <version>3.5.1</version>
     <packaging>jar</packaging>
 
     <name>Apache Causeway Ext - Server Sent Events (Broadcast)</name>
