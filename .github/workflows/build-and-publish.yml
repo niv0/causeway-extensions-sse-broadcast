@@ -1,0 +1,150 @@
+name: Build and Publish to Maven Registry
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - '**/*.java'
+      - '**/pom.xml'
+      - 'src/**'
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Cache Maven repository
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Extract current version
+        id: current_version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+
+      - name: Increase patch version (on push to master/main)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        run: |
+          echo "Current version:"
+          mvn help:evaluate -Dexpression=project.version -q -DforceStdout
+          
+          # Update version using versions-maven-plugin
+          mvn build-helper:parse-version versions:set \
+            -DnewVersion=\${parsedVersion.majorVersion}.\${parsedVersion.minorVersion}.\${parsedVersion.nextIncrementalVersion} \
+            -DgenerateBackupPoms=false \
+            --batch-mode
+          
+          echo "New version:"
+          mvn help:evaluate -Dexpression=project.version -q -DforceStdout
+
+      - name: Extract new version
+        id: new_version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version to build: $VERSION"
+
+      - name: Build with Maven
+        run: mvn clean install --batch-mode
+
+      - name: Run tests
+        run: mvn test --batch-mode
+
+      - name: Deploy to GitHub Packages
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mvn deploy \
+            --batch-mode \
+            -DskipTests \
+            -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository }}
+
+      - name: Commit and push updated pom.xml with tag
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        env:
+          VERSION: ${{ steps.new_version.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          
+          # Check if there are changes to commit
+          if git diff --quiet pom.xml; then
+            echo "No version changes to commit"
+          else
+            git add pom.xml
+            git commit -m "chore: bump version to $VERSION [skip ci]"
+            
+            # Create tag
+            git tag -a "v$VERSION" -m "Release version $VERSION"
+            
+            # Push changes and tag
+            git push origin HEAD:${GITHUB_REF#refs/heads/}
+            git push origin "v$VERSION"
+            
+            echo "Committed and pushed version $VERSION with tag v$VERSION"
+          fi
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.new_version.outputs.version }}
+          name: Release ${{ steps.new_version.outputs.version }}
+          body: |
+            ## Release ${{ steps.new_version.outputs.version }}
+            
+            **Artifact**: `causeway-extensions-sse-broadcast-${{ steps.new_version.outputs.version }}.jar`
+            
+            ### Maven Dependency
+            ```xml
+            <dependency>
+                <groupId>org.apache.causeway.extensions</groupId>
+                <artifactId>causeway-extensions-sse-broadcast</artifactId>
+                <version>${{ steps.new_version.outputs.version }}</version>
+            </dependency>
+            ```
+            
+            Published to GitHub Packages Maven Registry.
+          draft: false
+          prerelease: false
+          files: |
+            target/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
