@@ -38,7 +38,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.apache.causeway.applib.services.iactnlayer.InteractionService;
 import org.apache.causeway.commons.internal.base._Strings;
 import org.apache.causeway.core.config.CausewayConfiguration;
-import org.apache.causeway.extensions.sse.applib.annotations.SseSource;
 import org.apache.causeway.extensions.sse.applib.service.SseChannel;
 
 import lombok.extern.slf4j.Slf4j;
@@ -163,8 +162,8 @@ public class BroadcastSseServlet extends HttpServlet {
                     request.getRequestedSessionId());
                 log.warn("HINT: For development/testing, set causeway.extensions.sse.broadcast.bypass-authentication=true");
                 response.setStatus(401);
-                response.setContentType("text/event-stream");
-                response.getWriter().write("event: error\ndata: Authentication required - session not found. For development, enable bypass-authentication.\n\n");
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\":\"authentication_required\",\"message\":\"No session found. Please log in first.\"}");
                 response.getWriter().flush();
                 return; // Exit early - don't start async processing
             }
